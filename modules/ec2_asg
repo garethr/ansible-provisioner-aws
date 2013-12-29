@@ -1,12 +1,13 @@
 #!/usr/bin/python
 
 EXAMPLES = '''
-- ec2_lc: >
-    name: special
-    image_id: ami-XXX
-    key_name: default
-    security_groups: 'group,group2'
-
+- ec2_asg: >
+    group_name: special
+    load_balancers: 'lb1,lb2'
+    availability_zones: 'eu-west-1a,eu-west-1b'
+    launch_config: lc
+    min_size: 1
+    max_size: 10
 '''
 
 import sys
@@ -17,7 +18,7 @@ from ansible.module_utils.ec2 import *
 
 try:
     import boto.ec2.autoscale
-    from boto.ec2.autoscale import LaunchConfiguration
+    from boto.ec2.autoscale import AutoScaleConnection
 except ImportError:
     print "failed=True msg='boto required for this module'"
     sys.exit(1)
@@ -34,10 +35,12 @@ AWS_REGIONS = ['ap-northeast-1',
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            name = dict(required=True, type='str'),
-            image_id = dict(required=True, type='str'),
-            key_name = dict(required=True, type='str'),
-            security_groups = dict(required=True, type='list'),
+            group_name = dict(required=True, type='str'),
+            load_balancers = dict(required=True, type='list'),
+            availability_zones = dict(required=True, type='list'),
+            launch_config = dict(required=True, type='str'),
+            min_size = dict(required=True, type='int'),
+            max_size = dict(required=True, type='int'),
             region = dict(aliases=['aws_region', 'ec2_region'], choices=AWS_REGIONS),
             ec2_url = dict(),
             ec2_secret_key = dict(aliases=['aws_secret_key', 'secret_key'], no_log=True),
@@ -47,10 +50,12 @@ def main():
 
     ec2_url, aws_access_key, aws_secret_key, region = get_ec2_creds(module)
 
-    name = module.params.get('name')
-    image_id = module.params.get('image_id')
-    key_name = module.params.get('key_name')
-    security_groups = module.params['security_groups']
+    group_name = module.params.get('name')
+    load_balancers = module.params['load_balancers']
+    availability_zones = module.params['availability_zones']
+    launch_config = module.params.get('launch_config')
+    min_size = module.params.get('min_size')
+    max_size = module.params.get('max_size')
 
     if region:
         try:
@@ -58,13 +63,16 @@ def main():
         except boto.exception.NoAuthHandlerFound, e:
             module.fail_json(msg = str(e))
 
-    lc = LaunchConfiguration(
-        name=name,
-        image_id=image_id,
-        key_name=key_name,
-        security_groups=security_groups)
+    autoscale.create_auto_scaling_group(ag)
 
-    autoscale.create_launch_configuration(lc)
+    ag = AutoScalingGroup(
+        group_name=group_name,
+        load_balancers=load_balancers,
+        availability_zones=availability_zones,
+        launch_config=launch_config,
+        min_size=min_size,
+        max_size=max_size,
+        connection=autoscale)
 
     module.exit_json(changed=True)
 
