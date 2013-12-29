@@ -1,0 +1,71 @@
+#!/usr/bin/python
+
+EXAMPLES = '''
+- ec2_lc: >
+    name: special
+    image_id: ami-XXX
+    key_name: default
+    security_groups: 'group,group2'
+
+'''
+
+import sys
+import time
+
+from ansible.module_utils.basic import *
+from ansible.module_utils.ec2 import *
+
+try:
+    import boto.ec2.autoscale
+    from boto.ec2.autoscale import LaunchConfiguration, AutoScaleConnection
+except ImportError:
+    print "failed=True msg='boto required for this module'"
+    sys.exit(1)
+
+AWS_REGIONS = ['ap-northeast-1',
+               'ap-southeast-1',
+               'ap-southeast-2',
+               'eu-west-1',
+               'sa-east-1',
+               'us-east-1',
+               'us-west-1',
+               'us-west-2']
+
+def main():
+    module = AnsibleModule(
+        argument_spec = dict(
+            name = dict(required=True, type='str'),
+            image_id = dict(required=True, type='str'),
+            key_name = dict(required=True, type='str'),
+            security_groups = dict(required=True, type='list'),
+            region = dict(aliases=['aws_region', 'ec2_region'], choices=AWS_REGIONS),
+            ec2_url = dict(),
+            ec2_secret_key = dict(aliases=['aws_secret_key', 'secret_key'], no_log=True),
+            ec2_access_key = dict(aliases=['aws_access_key', 'access_key']),
+        )
+    )
+
+    ec2_url, aws_access_key, aws_secret_key, region = get_ec2_creds(module)
+
+    name = module.params.get('name')
+    image_id = module.params.get('image_id')
+    key_name = module.params.get('key_name')
+    security_groups = module.params['security_groups']
+
+    if region:
+        try:
+            autoscale = boto.ec2.autoscale.connect_to_region(region, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
+        except boto.exception.NoAuthHandlerFound, e:
+            module.fail_json(msg = str(e))
+
+    lc = LaunchConfiguration(
+        name=name,
+        image_id=image_id,
+        key_name=key_name,
+        security_groups=security_groups)
+
+    autoscale.create_launch_configuration(lc)
+
+    module.exit_json(changed=True)
+
+main()

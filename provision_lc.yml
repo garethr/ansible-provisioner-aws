@@ -1,0 +1,11 @@
+---
+- hosts: localhost
+  gather_facts: False
+
+  tasks:
+  - name: setup launch configs
+    ec2_lc: >
+      name=bob4
+      image_id=ami-8e987ef9
+      key_name=garethr
+      security_groups='default'
