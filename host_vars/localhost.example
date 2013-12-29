@@ -1,0 +1,5 @@
+---
+default_group: default
+default_keypair: garethr
+default_instance_type: m1.small
+default_image: ami-8e987ef9

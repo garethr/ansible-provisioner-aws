@@ -1,0 +1,10 @@
+---
+- hosts: localhost
+  gather_facts: False
+
+  vars_files:
+    - vars/custom.yml
+    - vars/instances.yml
+
+  tasks:
+    - include: tasks/create_instance.yml instances={{instances}}
