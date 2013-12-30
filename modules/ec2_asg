@@ -18,7 +18,7 @@ from ansible.module_utils.ec2 import *
 
 try:
     import boto.ec2.autoscale
-    from boto.ec2.autoscale import AutoScaleConnection
+    from boto.ec2.autoscale import AutoScaleConnection, AutoScalingGroup
 except ImportError:
     print "failed=True msg='boto required for this module'"
     sys.exit(1)
@@ -35,10 +35,10 @@ AWS_REGIONS = ['ap-northeast-1',
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            group_name = dict(required=True, type='str'),
+            name = dict(required=True, type='str'),
             load_balancers = dict(required=True, type='list'),
             availability_zones = dict(required=True, type='list'),
-            launch_config = dict(required=True, type='str'),
+            launch_config_name = dict(required=True, type='str'),
             min_size = dict(required=True, type='int'),
             max_size = dict(required=True, type='int'),
             region = dict(aliases=['aws_region', 'ec2_region'], choices=AWS_REGIONS),
@@ -53,7 +53,7 @@ def main():
     group_name = module.params.get('name')
     load_balancers = module.params['load_balancers']
     availability_zones = module.params['availability_zones']
-    launch_config = module.params.get('launch_config')
+    launch_config_name = module.params.get('launch_config_name')
     min_size = module.params.get('min_size')
     max_size = module.params.get('max_size')
 
@@ -63,16 +63,18 @@ def main():
         except boto.exception.NoAuthHandlerFound, e:
             module.fail_json(msg = str(e))
 
-    autoscale.create_auto_scaling_group(ag)
+    launch_configs = autoscale.get_all_launch_configurations(name=[launch_config_name])
 
     ag = AutoScalingGroup(
         group_name=group_name,
         load_balancers=load_balancers,
         availability_zones=availability_zones,
-        launch_config=launch_config,
+        launch_config=launch_configs[0],
         min_size=min_size,
         max_size=max_size,
         connection=autoscale)
+
+    autoscale.create_auto_scaling_group(ag)
 
     module.exit_json(changed=True)
 

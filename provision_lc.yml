@@ -5,7 +5,15 @@
   tasks:
   - name: setup launch configs
     ec2_lc: >
-      name=bob4
+      name=test-lc
       image_id=ami-8e987ef9
       key_name=garethr
       security_groups='default'
+  - name: setup autoscaling group
+    ec2_asg: >
+      name=test-asg
+      load_balancers=''
+      availability_zones='eu-west-1a'
+      min_size=1
+      max_size=3
+      launch_config_name=test-lc
