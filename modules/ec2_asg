@@ -42,6 +42,7 @@ def main():
             launch_config_name = dict(required=True, type='str'),
             min_size = dict(required=True, type='int'),
             max_size = dict(required=True, type='int'),
+            state = dict(default='present', choices=['present', 'absent']),
             region = dict(aliases=['aws_region', 'ec2_region'], choices=AWS_REGIONS),
             ec2_url = dict(),
             ec2_secret_key = dict(aliases=['aws_secret_key', 'secret_key'], no_log=True),
@@ -51,12 +52,8 @@ def main():
 
     ec2_url, aws_access_key, aws_secret_key, region = get_ec2_creds(module)
 
+    state = module.params.get('state')
     group_name = module.params.get('name')
-    load_balancers = module.params['load_balancers']
-    availability_zones = module.params['availability_zones']
-    launch_config_name = module.params.get('launch_config_name')
-    min_size = module.params.get('min_size')
-    max_size = module.params.get('max_size')
 
     if region:
         try:
@@ -64,22 +61,40 @@ def main():
         except boto.exception.NoAuthHandlerFound, e:
             module.fail_json(msg = str(e))
 
-    launch_configs = autoscale.get_all_launch_configurations(name=[launch_config_name])
+    if state == 'present':
 
-    ag = AutoScalingGroup(
-        group_name=group_name,
-        load_balancers=load_balancers,
-        availability_zones=availability_zones,
-        launch_config=launch_configs[0],
-        min_size=min_size,
-        max_size=max_size,
-        connection=autoscale)
+        load_balancers = module.params['load_balancers']
+        availability_zones = module.params['availability_zones']
+        launch_config_name = module.params.get('launch_config_name')
+        min_size = module.params.get('min_size')
+        max_size = module.params.get('max_size')
 
-    try:
-        autoscale.create_auto_scaling_group(ag)
-        module.exit_json(changed=True)
-    except BotoServerError, e:
-        module.exit_json(changed=False, msg=str(e))
+        launch_configs = autoscale.get_all_launch_configurations(name=[launch_config_name])
+
+        ag = AutoScalingGroup(
+            group_name=group_name,
+            load_balancers=load_balancers,
+            availability_zones=availability_zones,
+            launch_config=launch_configs[0],
+            min_size=min_size,
+            max_size=max_size,
+            connection=autoscale)
+
+        try:
+            autoscale.create_auto_scaling_group(ag)
+            module.exit_json(changed=True)
+        except BotoServerError, e:
+            module.exit_json(changed=False, msg=str(e))
+
+    elif state == 'absent':
+        groups = autoscale.get_all_groups(names=[group_name])
+        if groups:
+            group = groups[0]
+            group.shutdown_instances()
+            group.delete()
+            module.exit_json(changed=True)
+        else:
+            module.exit_json(changed=False)
 
 
 main()

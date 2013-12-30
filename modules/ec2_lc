@@ -39,6 +39,7 @@ def main():
             image_id = dict(required=True, type='str'),
             key_name = dict(required=True, type='str'),
             security_groups = dict(required=True, type='list'),
+            state = dict(default='present', choices=['present', 'absent']),
             region = dict(aliases=['aws_region', 'ec2_region'], choices=AWS_REGIONS),
             ec2_url = dict(),
             ec2_secret_key = dict(aliases=['aws_secret_key', 'secret_key'], no_log=True),
@@ -48,28 +49,40 @@ def main():
 
     ec2_url, aws_access_key, aws_secret_key, region = get_ec2_creds(module)
 
-    name = module.params.get('name')
-    image_id = module.params.get('image_id')
-    key_name = module.params.get('key_name')
-    security_groups = module.params['security_groups']
-
     if region:
         try:
             autoscale = boto.ec2.autoscale.connect_to_region(region, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
         except boto.exception.NoAuthHandlerFound, e:
             module.fail_json(msg = str(e))
 
-    lc = LaunchConfiguration(
-        name=name,
-        image_id=image_id,
-        key_name=key_name,
-        security_groups=security_groups)
+    state = module.params.get('state')
+    name = module.params.get('name')
 
-    try:
-        autoscale.create_launch_configuration(lc)
-        module.exit_json(changed=True)
-    except BotoServerError, e:
-        module.exit_json(changed=False, msg=str(e))
+    if state == 'present':
 
+        image_id = module.params.get('image_id')
+        key_name = module.params.get('key_name')
+        security_groups = module.params['security_groups']
+
+
+        lc = LaunchConfiguration(
+            name=name,
+            image_id=image_id,
+            key_name=key_name,
+            security_groups=security_groups)
+
+        try:
+            autoscale.create_launch_configuration(lc)
+            module.exit_json(changed=True)
+        except BotoServerError, e:
+            module.exit_json(changed=False, msg=str(e))
+
+    elif state == 'absent':
+        launch_configs = autoscale.get_all_launch_configurations(name=[name])
+        if launch_configs:
+            launch_configs[0].delete()
+            module.exit_json(changed=True)
+        else:
+            module.exit_json(changed=False)
 
 main()
