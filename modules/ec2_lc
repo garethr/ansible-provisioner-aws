@@ -18,6 +18,7 @@ from ansible.module_utils.ec2 import *
 try:
     import boto.ec2.autoscale
     from boto.ec2.autoscale import LaunchConfiguration
+    from boto.exception import BotoServerError
 except ImportError:
     print "failed=True msg='boto required for this module'"
     sys.exit(1)
@@ -64,8 +65,11 @@ def main():
         key_name=key_name,
         security_groups=security_groups)
 
-    autoscale.create_launch_configuration(lc)
+    try:
+        autoscale.create_launch_configuration(lc)
+        module.exit_json(changed=True)
+    except BotoServerError, e:
+        module.exit_json(changed=False, msg=str(e))
 
-    module.exit_json(changed=True)
 
 main()

@@ -19,6 +19,7 @@ from ansible.module_utils.ec2 import *
 try:
     import boto.ec2.autoscale
     from boto.ec2.autoscale import AutoScaleConnection, AutoScalingGroup
+    from boto.exception import BotoServerError
 except ImportError:
     print "failed=True msg='boto required for this module'"
     sys.exit(1)
@@ -74,8 +75,11 @@ def main():
         max_size=max_size,
         connection=autoscale)
 
-    autoscale.create_auto_scaling_group(ag)
+    try:
+        autoscale.create_auto_scaling_group(ag)
+        module.exit_json(changed=True)
+    except BotoServerError, e:
+        module.exit_json(changed=False, msg=str(e))
 
-    module.exit_json(changed=True)
 
 main()
