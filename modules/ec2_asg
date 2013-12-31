@@ -33,6 +33,55 @@ AWS_REGIONS = ['ap-northeast-1',
                'us-west-1',
                'us-west-2']
 
+
+def create_autoscaling_group(connection, module):
+    group_name = module.params.get('name')
+    load_balancers = module.params['load_balancers']
+    availability_zones = module.params['availability_zones']
+    launch_config_name = module.params.get('launch_config_name')
+    min_size = module.params.get('min_size')
+    max_size = module.params.get('max_size')
+
+    launch_configs = connection.get_all_launch_configurations(name=[launch_config_name])
+
+    ag = AutoScalingGroup(
+        group_name=group_name,
+        load_balancers=load_balancers,
+        availability_zones=availability_zones,
+        launch_config=launch_configs[0],
+        min_size=min_size,
+        max_size=max_size,
+        connection=connection)
+
+    try:
+        connection.create_auto_scaling_group(ag)
+        module.exit_json(changed=True)
+    except BotoServerError, e:
+        module.exit_json(changed=False, msg=str(e))
+
+
+def delete_autoscaling_group(connection, module):
+    group_name = module.params.get('name')
+    groups = connection.get_all_groups(names=[group_name])
+    if groups:
+        group = groups[0]
+        group.shutdown_instances()
+
+        instances = True
+        while instances:
+            connection.get_all_groups()
+            for group in groups:
+                if group.name == group_name:
+                    if not group.instances:
+                        instances = False
+            time.sleep(10)
+
+        group.delete()
+        module.exit_json(changed=True)
+    else:
+        module.exit_json(changed=False)
+
+
 def main():
     module = AnsibleModule(
         argument_spec = dict(
@@ -53,48 +102,16 @@ def main():
     ec2_url, aws_access_key, aws_secret_key, region = get_ec2_creds(module)
 
     state = module.params.get('state')
-    group_name = module.params.get('name')
 
-    if region:
-        try:
-            autoscale = boto.ec2.autoscale.connect_to_region(region, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
-        except boto.exception.NoAuthHandlerFound, e:
-            module.fail_json(msg = str(e))
+    try:
+        connection = boto.ec2.autoscale.connect_to_region(region, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
+    except boto.exception.NoAuthHandlerFound, e:
+        module.fail_json(msg = str(e))
 
     if state == 'present':
-
-        load_balancers = module.params['load_balancers']
-        availability_zones = module.params['availability_zones']
-        launch_config_name = module.params.get('launch_config_name')
-        min_size = module.params.get('min_size')
-        max_size = module.params.get('max_size')
-
-        launch_configs = autoscale.get_all_launch_configurations(name=[launch_config_name])
-
-        ag = AutoScalingGroup(
-            group_name=group_name,
-            load_balancers=load_balancers,
-            availability_zones=availability_zones,
-            launch_config=launch_configs[0],
-            min_size=min_size,
-            max_size=max_size,
-            connection=autoscale)
-
-        try:
-            autoscale.create_auto_scaling_group(ag)
-            module.exit_json(changed=True)
-        except BotoServerError, e:
-            module.exit_json(changed=False, msg=str(e))
-
+        create_autoscaling_group(connection, module)
     elif state == 'absent':
-        groups = autoscale.get_all_groups(names=[group_name])
-        if groups:
-            group = groups[0]
-            group.shutdown_instances()
-            group.delete()
-            module.exit_json(changed=True)
-        else:
-            module.exit_json(changed=False)
+        delete_autoscaling_group(connection, module)
 
 
 main()
